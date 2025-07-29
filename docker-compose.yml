@@ -1,0 +1,290 @@
+#******************************************************************************************************************************************************
+#******************************************************* services *************************************************************************************
+#******************************************************************************************************************************************************
+
+services:
+  #====================================================================================================================================================
+  #======================================================= DataBases ==================================================================================
+  #====================================================================================================================================================
+  mysql:
+    image: mysql:8.0.29
+    container_name: mysql
+    hostname: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mydb
+      MYSQL_USER: myuser
+      MYSQL_PASSWORD: mypassword
+    ports:
+      - 3305:3306
+    networks:
+      - data-net
+
+
+
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: "123"
+      CLICKHOUSE_DB: default
+    volumes:
+      - ./databases/clickhouse/config/default-password.xml:/etc/clickhouse-server/users.d/default-password.xml
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    networks:
+      - data-net
+
+  #==================================================================================================================================================== 
+  #============================================================ minio ================================================================================= 
+  #==================================================================================================================================================== 
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9001:9001"  
+      - "9002:9000"  
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./minio/data:/data
+    networks:
+      - data-net
+
+  #====================================================================================================================================================
+  #======================================================= spark ======================================================================================
+  #==================================================================================================================================================== 
+
+  spark-master:
+    image: bitnami/spark:3.4.2
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+    ports:
+      - "7077:7077"
+      - "8180:8080"  
+    volumes:
+      - ./spark/jar/spark-sql-kafka-0-10_2.12-3.4.1.jar:/opt/bitnami/spark/jars/spark-sql-kafka-0-10_2.12-3.4.1.jar
+      - ./spark/jar/kafka-clients-3.4.1.jar:/opt/bitnami/spark/jars/kafka-clients-3.4.1.jar
+      - ./spark/jar/kafka_2.12-3.4.1.jar:/opt/bitnami/spark/jars/kafka_2.12-3.4.1.jar
+      - ./spark/jar/spark-token-provider-kafka-0-10_2.12-3.4.1.jar:/opt/bitnami/spark/jars/spark-token-provider-kafka-0-10_2.12-3.4.1.jar
+      - ./spark/jar/commons-pool2-2.11.1.jar:/opt/bitnami/spark/jars/commons-pool2-2.11.1.jar
+      - ./spark/jar/postgresql-42.7.7.jar:/opt/bitnami/spark/jars/postgresql-42.7.7.jar
+      - ./spark/jar/mysql-connector-j-9.3.0.jar:/opt/bitnami/spark/jars/mysql-connector-j-9.3.0.jar
+      - ./spark/jar/mongo-spark-connector_2.12-10.2.0.jar:/opt/bitnami/spark/jars/mongo-spark-connector_2.12-10.2.0.jar
+      - ./spark/jar/bson-4.10.2.jar:/opt/bitnami/spark/jars/bson-4.10.2.jar
+      - ./spark/jar/mongodb-driver-core-4.10.2.jar:/opt/bitnami/spark/jars/mongodb-driver-core-4.10.2.jar
+      - ./spark/jar/mongodb-driver-sync-4.10.2.jar:/opt/bitnami/spark/jars/mongodb-driver-sync-4.10.2.jar
+      - ./spark/jar/delta-core_2.12-2.4.0.jar:/opt/bitnami/spark/jars/delta-core_2.12-2.4.0.jar
+      - ./spark/jar/hadoop-aws-3.3.6.jar:/opt/bitnami/spark/jars/hadoop-aws-3.3.6.jar
+      - ./spark/jar/aws-java-sdk-bundle-1.12.696.jar:/opt/bitnami/spark/jars/aws-java-sdk-bundle-1.12.696.jar
+      - ./spark/jar/delta-storage-2.4.0.jar:/opt/bitnami/spark/jars/delta-storage-2.4.0.jar
+      - ./spark/jar/iceberg-spark-runtime-3.4_2.12-1.4.3.jar:/opt/bitnami/spark/jars/iceberg-spark-runtime-3.4_2.12-1.4.3.jar
+      - ./spark/jar/clickhouse-jdbc-0.5.0-all.jar:/opt/bitnami/spark/jars/clickhouse-jdbc-0.5.0-all.jar
+      - ./spark/jar/snowflake-jdbc-3.13.30.jar:/opt/bitnami/spark/jars/snowflake-jdbc-3.13.30.jar
+      - ./spark/jar/spark-snowflake_2.12-2.16.0-spark_3.4.jar:/opt/bitnami/spark/jars/spark-snowflake_2.12-2.16.0-spark_3.4.jar
+
+    networks:
+      - data-net
+
+  spark-worker:
+    image: bitnami/spark:3.4.2
+    container_name: spark-worker
+    ports:
+      - "8181:8081"  
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=8      
+      - SPARK_WORKER_MEMORY=8g   
+      - SPARK_WORKER_MEMORY_OVERHEAD=4g  
+    volumes:
+      - ./spark/jar/spark-sql-kafka-0-10_2.12-3.4.1.jar:/opt/bitnami/spark/jars/spark-sql-kafka-0-10_2.12-3.4.1.jar
+      - ./spark/jar/kafka-clients-3.4.1.jar:/opt/bitnami/spark/jars/kafka-clients-3.4.1.jar
+      - ./spark/jar/kafka_2.12-3.4.1.jar:/opt/bitnami/spark/jars/kafka_2.12-3.4.1.jar
+      - ./spark/jar/spark-token-provider-kafka-0-10_2.12-3.4.1.jar:/opt/bitnami/spark/jars/spark-token-provider-kafka-0-10_2.12-3.4.1.jar
+      - ./spark/jar/commons-pool2-2.11.1.jar:/opt/bitnami/spark/jars/commons-pool2-2.11.1.jar
+      - ./spark/jar/postgresql-42.7.7.jar:/opt/bitnami/spark/jars/postgresql-42.7.7.jar
+      - ./spark/jar/mysql-connector-j-9.3.0.jar:/opt/bitnami/spark/jars/mysql-connector-j-9.3.0.jar
+      - ./spark/jar/mongo-spark-connector_2.12-10.2.0.jar:/opt/bitnami/spark/jars/mongo-spark-connector_2.12-10.2.0.jar
+      - ./spark/jar/bson-4.10.2.jar:/opt/bitnami/spark/jars/bson-4.10.2.jar
+      - ./spark/jar/mongodb-driver-core-4.10.2.jar:/opt/bitnami/spark/jars/mongodb-driver-core-4.10.2.jar
+      - ./spark/jar/mongodb-driver-sync-4.10.2.jar:/opt/bitnami/spark/jars/mongodb-driver-sync-4.10.2.jar
+      - ./spark/jar/delta-core_2.12-2.4.0.jar:/opt/bitnami/spark/jars/delta-core_2.12-2.4.0.jar
+      - ./spark/jar/hadoop-aws-3.3.6.jar:/opt/bitnami/spark/jars/hadoop-aws-3.3.6.jar
+      - ./spark/jar/aws-java-sdk-bundle-1.12.696.jar:/opt/bitnami/spark/jars/aws-java-sdk-bundle-1.12.696.jar
+      - ./spark/jar/delta-storage-2.4.0.jar:/opt/bitnami/spark/jars/delta-storage-2.4.0.jar
+      - ./spark/jar/iceberg-spark-runtime-3.4_2.12-1.4.3.jar:/opt/bitnami/spark/jars/iceberg-spark-runtime-3.4_2.12-1.4.3.jar
+      - ./spark/jar/clickhouse-jdbc-0.5.0-all.jar:/opt/bitnami/spark/jars/clickhouse-jdbc-0.5.0-all.jar
+      - ./spark/jar/snowflake-jdbc-3.13.30.jar:/opt/bitnami/spark/jars/snowflake-jdbc-3.13.30.jar
+      - ./spark/jar/spark-snowflake_2.12-2.16.0-spark_3.4.jar:/opt/bitnami/spark/jars/spark-snowflake_2.12-2.16.0-spark_3.4.jar
+
+    depends_on:
+      - spark-master
+    networks:
+      - data-net
+  
+
+  jupyter:
+    build:
+      context: ./spark/Dockerfiles/jupyter
+      dockerfile: Dockerfile
+    container_name: jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - PYSPARK_SUBMIT_ARGS=--master spark://spark-master:7077 pyspark-shell
+      #- PYSPARK_SUBMIT_ARGS=--jars /opt/bitnami/spark/jars/snowflake-jdbc-3.13.30.jar,/opt/bitnami/spark/jars/spark-snowflake_2.12-2.16.0-spark_3.4.jar pyspark-shell
+    volumes:
+      - ./spark/jar/spark-sql-kafka-0-10_2.12-3.4.1.jar:/opt/bitnami/spark/jars/spark-sql-kafka-0-10_2.12-3.4.1.jar
+      - ./spark/jar/kafka-clients-3.4.1.jar:/opt/bitnami/spark/jars/kafka-clients-3.4.1.jar
+      - ./spark/jar/kafka_2.12-3.4.1.jar:/opt/bitnami/spark/jars/kafka_2.12-3.4.1.jar
+      - ./spark/jar/spark-token-provider-kafka-0-10_2.12-3.4.1.jar:/opt/bitnami/spark/jars/spark-token-provider-kafka-0-10_2.12-3.4.1.jar
+      - ./spark/jar/commons-pool2-2.11.1.jar:/opt/bitnami/spark/jars/commons-pool2-2.11.1.jar
+      - ./spark/jar/postgresql-42.7.7.jar:/opt/bitnami/spark/jars/postgresql-42.7.7.jar
+      - ./spark/jar/mysql-connector-j-9.3.0.jar:/opt/bitnami/spark/jars/mysql-connector-j-9.3.0.jar
+      - ./spark/jar/mongo-spark-connector_2.12-10.2.0.jar:/opt/bitnami/spark/jars/mongo-spark-connector_2.12-10.2.0.jar
+      - ./spark/jar/bson-4.10.2.jar:/opt/bitnami/spark/jars/bson-4.10.2.jar
+      - ./spark/jar/mongodb-driver-core-4.10.2.jar:/opt/bitnami/spark/jars/mongodb-driver-core-4.10.2.jar
+      - ./spark/jar/mongodb-driver-sync-4.10.2.jar:/opt/bitnami/spark/jars/mongodb-driver-sync-4.10.2.jar
+      - ./spark/jar/delta-core_2.12-2.4.0.jar:/opt/bitnami/spark/jars/delta-core_2.12-2.4.0.jar
+      - ./spark/jar/hadoop-aws-3.3.6.jar:/opt/bitnami/spark/jars/hadoop-aws-3.3.6.jar
+      - ./spark/jar/aws-java-sdk-bundle-1.12.696.jar:/opt/bitnami/spark/jars/aws-java-sdk-bundle-1.12.696.jar
+      - ./spark/jar/delta-storage-2.4.0.jar:/opt/bitnami/spark/jars/delta-storage-2.4.0.jar
+      - ./spark/jar/iceberg-spark-runtime-3.4_2.12-1.4.3.jar:/opt/bitnami/spark/jars/iceberg-spark-runtime-3.4_2.12-1.4.3.jar
+      - ./spark/jar/clickhouse-jdbc-0.5.0-all.jar:/opt/bitnami/spark/jars/clickhouse-jdbc-0.5.0-all.jar
+      - ./spark/jar/snowflake-jdbc-3.13.30.jar:/opt/bitnami/spark/jars/snowflake-jdbc-3.13.30.jar
+      - ./spark/jar/spark-snowflake_2.12-2.16.0-spark_3.4.jar:/opt/bitnami/spark/jars/spark-snowflake_2.12-2.16.0-spark_3.4.jar
+      - ./spark/notebooks:/opt/notebooks
+    depends_on:
+      - spark-master
+    entrypoint: >
+      jupyter notebook --ip=0.0.0.0 --port=8888 --allow-root
+                      --NotebookApp.token='' --NotebookApp.password=''
+
+    networks:
+      - data-net
+
+
+     
+  #==================================================================================================================================================== 
+  #============================================================== airflow ============================================================================= 
+  #==================================================================================================================================================== 
+  airflow-webserver:
+    build:
+      context: ./airflow/Dockerfile
+      dockerfile: Dockerfile
+    container_name: airflow-webserver
+    restart: always
+    depends_on:
+      - airflow-postgres
+      - airflow-redis
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://airflow-redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CORE__FERNET_KEY: ''
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'false'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+      - ./airflow/config/airflow-init.sh:/opt/airflow/airflow-init.sh  
+      -  airflow_state:/opt/airflow
+
+    ports:
+      - "8084:8080"
+    command: bash -c "/opt/airflow/airflow-init.sh "
+    networks:
+      - data-net
+
+  airflow-scheduler:
+    build:
+      context: ./airflow/Dockerfile
+      dockerfile: Dockerfile
+    container_name: airflow-scheduler
+    restart: always
+    depends_on:
+      - airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://airflow-redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres:5432/airflow
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: bash -c "airflow scheduler"
+    networks:
+      - data-net
+
+  airflow-worker:
+    build:
+      context: ./airflow/Dockerfile
+      dockerfile: Dockerfile
+    container_name: airflow-worker
+    restart: always
+    depends_on:
+      - airflow-webserver
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__CORE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://airflow-redis:6379/0
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://airflow:airflow@airflow-postgres:5432/airflow
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./airflow/logs:/opt/airflow/logs
+      - ./airflow/plugins:/opt/airflow/plugins
+    command: bash -c "airflow celery worker"
+    networks:
+      - data-net
+
+  airflow-redis:
+    image: redis:6.2
+    container_name: airflow-redis
+    networks:
+      - data-net
+
+  airflow-postgres:
+    image: postgres:14
+    container_name: airflow-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_db:/var/lib/postgresql/data
+    networks:
+      - data-net
+
+
+#******************************************************************************************************************************************************
+#******************************************************* volumes & networks ***************************************************************************
+#******************************************************************************************************************************************************
+volumes:
+  clickhouse_data:
+  clickhouse_logs:
+  airflow_db:
+  airflow_state: 
+networks:
+  data-net:
+    driver: bridge
+
+#******************************************************************************************************************************************************
+#******************************************************************************************************************************************************
+#******************************************************************************************************************************************************
+
+
